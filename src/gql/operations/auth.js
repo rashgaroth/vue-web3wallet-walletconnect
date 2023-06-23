@@ -18,3 +18,13 @@ export const SIGN_TYPED_DATA = gql`
     )
 }
 `
+
+export const PERSONAL_SIGN = gql`
+  query personalSign($email: String!, $projectId: ID!, $hexMessage: String!) {
+    res: getUserPersonalSign(
+      projectId: $projectId,
+      email: $email,
+      hexMessage: $hexMessage
+    )
+}
+`

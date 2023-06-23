@@ -4,34 +4,39 @@
     <vs-dialog v-model="openModal" not-padding>
       <div class="flex flex-col bg-gray-900 p-5 rounded-xl space-y-5">
         <h4 class="text-gray-200 ml-2">
-          <strong class="text-text-main">Sign Typed Data</strong>
+          <strong class="text-text-main">Personal Sign Data</strong>
         </h4>
         <p class="ml-2 text-gray-200">Request data</p>
         <div class="p-2 mx-2 rounded-lg bg-gray-300 flex flex-col space-y-1">
-          <code>
-            id: {{ requestId }}
-          </code>
-          <code>
-            dapp name: {{ dappName }}
-          </code>
-          <code>
-            request id: {{ requestId }}
-          </code>
-          <code>
-            method: {{ method }}
-          </code>
+          <code> id: {{ requestId }} </code>
+          <code> dapp name: {{ dappName }} </code>
+          <code> request id: {{ requestId }} </code>
+          <code> method: {{ method }} </code>
         </div>
         <p class="ml-2 text-gray-200">Sign data</p>
-        <div class="p-2 mx-2 rounded-lg bg-gray-300 flex flex-col space-y-1 max-h-28 overflow-y-scroll max-w-md">
+        <div
+          class="p-2 mx-2 rounded-lg bg-gray-300 flex flex-col space-y-1 max-h-28 overflow-y-scroll max-w-md"
+        >
           <code>
-            {{ JSON.parse(signData || {}).message }}
+            {{ signData }}
           </code>
         </div>
         <div class="footer-dialog flex flex-row items-center">
-          <vs-button block color="#6E27D8" @click="onRequest('approve')" :loading="buttonLoading">
+          <vs-button
+            block
+            color="#6E27D8"
+            @click="onRequest('approve')"
+            :loading="buttonLoading"
+          >
             Sign
           </vs-button>
-          <vs-button block danger state="danger" @click="onRequest('reject')" :disabled="buttonLoading">
+          <vs-button
+            block
+            danger
+            state="danger"
+            @click="onRequest('reject')"
+            :disabled="buttonLoading"
+          >
             Reject
           </vs-button>
         </div>
@@ -51,10 +56,10 @@ export default {
     method: String,
     signData: String,
     buttonLoading: Boolean,
-    onRequest: {}
+    onRequest: {},
   },
   data: () => ({
-    isLoading: false
+    isLoading: false,
   }),
-}
+};
 </script>
