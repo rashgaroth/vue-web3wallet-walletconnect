@@ -1,5 +1,5 @@
 import { apolloClient } from "@/apollo"
-import { GET_USER_WALLET, SIGN_TYPED_DATA } from "../operations/auth"
+import { GET_USER_WALLET, PERSONAL_SIGN, SIGN_TYPED_DATA } from "../operations/auth"
 
 export const fetchUserWallet = async (email) => {
   try {
@@ -34,6 +34,25 @@ export const signTypedData = async ({ types, domain, message, email }) => {
         valueTypes: stringTypes,
         domain: stringDomain,
         values: stringMessage
+      }
+    })
+
+    return res
+  } catch (error) {
+    throw new Error(error)
+  }
+}
+
+export const personalSign = async ({ hexMessage, email }) => {
+  try {
+    const projectId = process.env.VUE_APP_PROJECTID
+
+    const res = await apolloClient.query({
+      query: PERSONAL_SIGN,
+      variables: {
+        email,
+        projectId,
+        hexMessage
       }
     })
 
