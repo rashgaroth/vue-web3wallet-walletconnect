@@ -3,7 +3,7 @@ import { GET_USER_WALLET, SIGN_TYPED_DATA } from "../operations/auth"
 
 export const fetchUserWallet = async (email) => {
   try {
-    const projectId = process.env.VUE_APP_WC_PROJECT_ID
+    const projectId = process.env.VUE_APP_PROJECTID
     const res = await apolloClient.query({
       query: GET_USER_WALLET,
       variables: {
@@ -21,7 +21,7 @@ export const fetchUserWallet = async (email) => {
 
 export const signTypedData = async ({ types, domain, message, email }) => {
   try {
-    const projectId = process.env.VUE_APP_WC_PROJECT_ID
+    const projectId = process.env.VUE_APP_PROJECTID
     const stringDomain = JSON.stringify(domain)
     const stringMessage = JSON.stringify(message)
     const stringTypes = JSON.stringify(types)
