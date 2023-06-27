@@ -278,16 +278,11 @@ export default {
     async onRequest(result) {
       if (result === constants.legacySessionProposalType.APPROVE) {
         const reqId = this.wcData.data.legacyCallRequestEvent.id;
-        const data = this.wcData.data.legacyCallRequestEvent.params[1];
-        if (!data) {
-          this.walletConnectController.legacySignClient.rejectRequest({
-            id: reqId,
-            error: 'Data is not valid',
-          });
-        }
 
+        let data = null;
         let getSignature = () => {};
         if (this.wcData.modalType === 'LegacySessionSignTypedDataModal') {
+          data = this.wcData.data.legacyCallRequestEvent.params[1];
           const jsonData = JSON.parse(data);
           const { types, domain, message } = jsonData;
           const email = localStorage.getItem('email');
@@ -302,6 +297,7 @@ export default {
             });
           };
         } else if (this.wcData.modalType === 'LegacySessionSignModal') {
+          data = this.wcData.data.legacyCallRequestEvent.params[0];
           const hexMessage = data;
           const email = localStorage.getItem('email');
           getSignature = async () => {
@@ -310,6 +306,13 @@ export default {
               email,
             });
           };
+        }
+
+        if (!data) {
+          this.walletConnectController.legacySignClient.rejectRequest({
+            id: reqId,
+            error: 'Data is not valid',
+          });
         }
 
         try {
