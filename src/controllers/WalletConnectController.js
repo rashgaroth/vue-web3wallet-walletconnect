@@ -1,7 +1,6 @@
 /* eslint-disable no-useless-catch */
 import { signClient, web3Wallet } from '@/utils/wc'
 import LegacySignClient from '@walletconnect/client'
-import { getSdkError } from '@walletconnect/utils'
 
 class WalletConnectController {
   /**
@@ -156,6 +155,9 @@ class WalletConnectController {
         }
       }
       this.onDisconnected()
+    } else {
+      // const sessions = web3Wallet.getActiveSessions()
+      console.log('disconnecting from walletconnect v2')
     }
   }
 
@@ -257,11 +259,12 @@ class WalletConnectController {
       web3Wallet.on('session_ping', data => console.log('ping', data))
       web3Wallet.on('session_event', data => console.log('event', data))
       web3Wallet.on('session_update', data => console.log('update', data))
-      web3Wallet.on('session_delete', async data => {
-        await web3Wallet.disconnectSession({
-          topic: data.topic,
-          reason: getSdkError('USER_DISCONNECTED')
-        })
+      web3Wallet.on('session_delete', async () => {
+        // await web3Wallet.disconnectSession({
+        //   topic: data.topic,
+        //   reason: getSdkError('USER_DISCONNECTED')
+        // })
+        window.location.reload()
       })
     }
   }

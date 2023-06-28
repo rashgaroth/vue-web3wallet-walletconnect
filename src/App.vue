@@ -40,6 +40,20 @@
         :buttonLoading="loading"
         :onRequest="onRequest"
       />
+
+      <div class="flex flex-col space-y-1">
+        <p>Connected sites</p>
+        <!-- eslint-disable-next-line vue/require-v-for-key -->
+        <div v-for="data in activedSessions" class="grid grid-cols-3 gap-3">
+          <div class="bg-gray-800 flex-col flex rounded-lg px-5 py-5">
+            <p class="text-sm font-bold">{{ data.peer.metadata.name }}</p>
+            <a class="text-sm mt-0 text-blue-400" :href="data.peer.metadata.name" target="_blank">{{ data.peer.metadata.url }}</a>
+            <button class="bg-red-500 text-white px-2 rounded-lg mt-5" @click="() => disconnectSession(data)">
+              Disconnect
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -92,6 +106,7 @@ export default {
     loading: false,
     dappConnected: false,
     wcVersion: 2,
+    activedSessions: []
   }),
   watch: {
     wcInitialized: async function (val) {
@@ -112,17 +127,13 @@ export default {
         // walletConnectController.createSignLegacyClient();
         this.walletConnectController = walletConnectController;
         if (web3Wallet) {
+          this.getSessions()
           if (this.wcData.data.legacyProposal.id !== 0) {
             localStorage.setItem('currentTopic', JSON.stringify(this.wcData.data.legacyProposal))
           }
-          const activeSessions = web3Wallet.getActiveSessions()
-          console.log({
-            ...this.wcData.data.legacyProposal,
-            activeSessions
-          })
         }
       }
-    },
+    }
   },
   async mounted() {
     const tmpSelectedAddress = localStorage.getItem('selectedAddress');
@@ -138,6 +149,10 @@ export default {
       this.wcInitialized = true;
     }
 
+    if (web3Wallet) {
+      this.getSessions()
+    }
+
     if (
       signClient &&
       signClient?.session &&
@@ -147,6 +162,26 @@ export default {
     }
   },
   methods: {
+    async disconnectSession(data) {
+      await web3Wallet.disconnectSession({
+        topic: data.topic,
+        reason: getSdkError('USER_DISCONNECTED')
+      })
+      window.location.reload()
+    },
+    getSessions() {
+      const topics = Object.keys(web3Wallet.getActiveSessions());
+      const sessions = []
+      for (let i in topics) {
+        const topic = topics[i]
+        const session = web3Wallet.getActiveSessions()[topic]
+        sessions.push({
+          ...session
+        })
+      }
+
+      this.activedSessions = sessions
+    },
     signalListenerHandler(type, data) {
       console.log(`onSignalListenerHandler`, { data, type })
       if (type === 'SessionProposalModal') {
@@ -215,12 +250,10 @@ export default {
       }
     },
     async wssConnectionHandler(version = 1, uri) {
-      console.log(`onWssConnectionHandler`, { version, uri })
       if (!this.walletConnectController) {
         console.error(`WalletConnectController is not initialized`);
         return;
       }
-      console.log(`@-> Connecting ... ->`, version, uri);
       if (version === 1) {
         this.walletConnectController.createSignLegacyClient({ uri });
       } else {
@@ -263,6 +296,9 @@ export default {
           relayProtocol: this.wcData.data.legacyProposal.params.relays[0].protocol,
           namespaces
         })
+
+        this.getSessions()
+
         this.walletConnectController.setupEventManagerHandler(true);
         this.wcData.modalType = '';
         this.wcData.openModal = false;

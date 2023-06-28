@@ -17,12 +17,9 @@
           Disconnect
         </vs-button>
       </div>
-      <div v-else class="grid grid-cols-2 gap-2">
+      <div v-else class="grid grid-cols-1 gap-1 w-full">
         <vs-button block color="success" state="success" success disabled>
           Connected
-        </vs-button>
-        <vs-button block danger state="danger" @click="disconnectWalletConnect()">
-          Disconnect Wallet Connect
         </vs-button>
       </div>      
     </div>
