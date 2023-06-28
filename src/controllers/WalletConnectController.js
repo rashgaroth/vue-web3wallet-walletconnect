@@ -1,6 +1,7 @@
 /* eslint-disable no-useless-catch */
-import { signClient } from '@/utils/wc'
+import { signClient, web3Wallet } from '@/utils/wc'
 import LegacySignClient from '@walletconnect/client'
+import { getSdkError } from '@walletconnect/utils'
 
 class WalletConnectController {
   /**
@@ -143,17 +144,19 @@ class WalletConnectController {
     return session
   }
 
-  async deleteCachedLegacySession() {
+  async deleteCachedLegacySession(version = 1) {
     if (typeof window === 'undefined') return
-    window.localStorage.removeItem('walletconnect')
-    if (this.legacySignClient && this.legacySignClient?.session && this.legacySignClient.session?.accounts?.length > 0) {
-      try {
-        await this.legacySignClient.killSession()
-      } catch (error) {
-        console.warn(error)
+    if (version === 1) {
+      window.localStorage.removeItem('walletconnect')
+      if (this.legacySignClient && this.legacySignClient?.session && this.legacySignClient.session?.accounts?.length > 0) {
+        try {
+          await this.legacySignClient.killSession()
+        } catch (error) {
+          console.warn(error)
+        }
       }
+      this.onDisconnected()
     }
-    this.onDisconnected()
   }
 
   /**
@@ -162,10 +165,45 @@ class WalletConnectController {
    * @param {Boolean} isInitialized
    * @memberof WalletConnectController
    */
-  setupEventManagerHandler(isInitialized = false) {
+  setupEventManagerHandler(isInitialized = false, version) {
     const onSessionProposal = (proposal) => {
       this.onSignal('SessionProposalModal', { proposal })
     }
+
+    const onSessionProposalV2 = (proposal) => {
+      this.onSignal('SessionProposalModal', { proposal })
+    }
+
+    const onSessionRequestV2 = (requestEvent) => {
+      const { params } = requestEvent
+      const { request } = params
+
+      switch (request.method) {
+        case this.EIP155_SIGNING_METHODS.ETH_SIGN:
+          console.log(`@-> ethSign request`)
+          break;
+        case this.EIP155_SIGNING_METHODS.PERSONAL_SIGN:
+          console.log(`@-> personalSign request`, requestEvent)
+          return this.onSignal('SessionSignModal', { requestEvent })
+
+        case this.EIP155_SIGNING_METHODS.ETH_SIGN_TYPED_DATA:
+          console.log(`@-> signTypedData request`)
+          break
+        case this.EIP155_SIGNING_METHODS.ETH_SIGN_TYPED_DATA_V3:
+          console.log(`@-> signTypedDataV3 request`)
+          break;
+        case this.EIP155_SIGNING_METHODS.ETH_SIGN_TYPED_DATA_V4:
+          console.log(`@-> signTypedDataV4 request`)
+          return this.onSignal('SessionSignTypedDataModal', { requestEvent })
+
+        case this.EIP155_SIGNING_METHODS.ETH_SEND_TRANSACTION:
+        case this.EIP155_SIGNING_METHODS.ETH_SIGN_TRANSACTION:
+          return this.onSignal('SessionSendTransactionModal', { requestEvent })
+        default:
+          return this.onSignal('SessionUnsuportedMethodModal', { requestEvent })
+      }
+    }
+
     const onSessionRequest = (requestEvent) => {
       const { topic, params } = requestEvent
       const { request } = params
@@ -202,13 +240,28 @@ class WalletConnectController {
     }
 
     if (isInitialized) {
-      signClient.on('session_proposal', onSessionProposal)
-      signClient.on('session_request', onSessionRequest)
-      signClient.on('session_ping', data => console.log('ping', data))
-      signClient.on('session_event', data => console.log('event', data))
-      signClient.on('session_update', data => console.log('update', data))
-      signClient.on('session_delete', data => {
-        console.log('delete', data)
+      if (version === 1) {
+        signClient.on('session_proposal', onSessionProposal)
+        signClient.on('session_request', onSessionRequest)
+        signClient.on('session_ping', data => console.log('ping', data))
+        signClient.on('session_event', data => console.log('event', data))
+        signClient.on('session_update', data => console.log('update', data))
+        signClient.on('session_delete', data => {
+          console.log('delete', data)
+        })
+      }
+
+      // V2
+      web3Wallet.on('session_proposal', onSessionProposalV2)
+      web3Wallet.on('session_request', onSessionRequestV2)
+      web3Wallet.on('session_ping', data => console.log('ping', data))
+      web3Wallet.on('session_event', data => console.log('event', data))
+      web3Wallet.on('session_update', data => console.log('update', data))
+      web3Wallet.on('session_delete', async data => {
+        await web3Wallet.disconnectSession({
+          topic: data.topic,
+          reason: getSdkError('USER_DISCONNECTED')
+        })
       })
     }
   }

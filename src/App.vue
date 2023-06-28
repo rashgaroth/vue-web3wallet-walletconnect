@@ -18,7 +18,7 @@
       </div>
       <LegacySessionProposalModal
         :openModal="
-          wcData.openModal && wcData.modalType === 'LegacySessionProposalModal'
+          wcData.openModal && wcData.modalType === 'SessionProposalModal'
         "
         :wcData="wcData"
         :requestId="wcData?.data?.legacyProposal?.id?.toString() || '0'"
@@ -26,31 +26,16 @@
         :onRequest="onLegacySessionProposalRequest"
         :dappUrl="getLegacyProposalUrl()"
       />
-      <LegacySessionSignTypedDataModal
-        :openModal="
-          wcData.openModal &&
-          wcData.modalType === 'LegacySessionSignTypedDataModal'
-        "
-        :wcData="wcData"
-        :requestId="getLegacySessionSignTypedDataRequestId().toString()"
-        :dappName="connectionData?.peerMeta?.name || 'Unknown'"
-        :method="wcData?.data?.legacyCallRequestEvent?.method || 'Unknown'"
-        :signData="
-          wcData?.data?.legacyCallRequestEvent?.params?.[1] || 'Unknown'
-        "
-        :buttonLoading="loading"
-        :onRequest="onRequest"
-      />
       <LegacySessionSignModal
         :openModal="
-          wcData.openModal && wcData.modalType === 'LegacySessionSignModal'
+          wcData.openModal && wcData.modalType === 'SessionSignModal'
         "
         :wcData="wcData"
         :requestId="getLegacySessionPersonalSignRequestId().toString()"
-        :dappName="connectionData?.peerMeta?.name || 'Unknown'"
-        :method="wcData?.data?.legacyCallRequestEvent?.method || 'Unknown'"
+        :dappName="getLegacyProposalDappName()"
+        :method="wcData?.data?.legacyCallRequestEvent?.params?.request?.method || 'Unknown'"
         :signData="
-          wcData?.data?.legacyCallRequestEvent?.params?.[0] || 'Unknown'
+          wcData?.data?.legacyCallRequestEvent?.params?.request?.params[0] || 'Unknown'
         "
         :buttonLoading="loading"
         :onRequest="onRequest"
@@ -64,12 +49,12 @@ import ConnectedView from './components/ConnectedView.vue';
 import DisconnectedView from './components/DisconnectedView.vue';
 import WalletConnectController from './controllers/WalletConnectController';
 import LegacySessionProposalModal from './components/LegacySessionProposalModal.vue';
-import LegacySessionSignTypedDataModal from './components/LegacySessionSignTypedDataModal.vue';
 import LegacySessionSignModal from './components/LegacySessionSignModal.vue';
-import { createSignClient, signClient } from './utils/wc';
+import { createSignClient, createWeb3WalletV2, pair, signClient, web3Wallet } from './utils/wc';
 import constants from './common/contants';
 import { getSdkError } from '@walletconnect/utils';
-import { personalSign, signTypedData } from './gql/mutations';
+import { personalSign } from './gql/mutations';
+import { formatJsonRpcError, formatJsonRpcResult } from '@json-rpc-tools/utils';
 
 export default {
   name: 'App',
@@ -77,7 +62,6 @@ export default {
     DisconnectedView,
     ConnectedView,
     LegacySessionProposalModal,
-    LegacySessionSignTypedDataModal,
     LegacySessionSignModal,
   },
   data: () => ({
@@ -107,6 +91,7 @@ export default {
     walletConnectController: null,
     loading: false,
     dappConnected: false,
+    wcVersion: 2,
   }),
   watch: {
     wcInitialized: async function (val) {
@@ -123,10 +108,19 @@ export default {
             this.dappConnected = false;
           },
         });
-        console.log('@-> setup event manager');
-        walletConnectController.setupEventManagerHandler(val);
-        walletConnectController.createSignLegacyClient();
+        walletConnectController.setupEventManagerHandler(val, this.wcVersion);
+        // walletConnectController.createSignLegacyClient();
         this.walletConnectController = walletConnectController;
+        if (web3Wallet) {
+          if (this.wcData.data.legacyProposal.id !== 0) {
+            localStorage.setItem('currentTopic', JSON.stringify(this.wcData.data.legacyProposal))
+          }
+          const activeSessions = web3Wallet.getActiveSessions()
+          console.log({
+            ...this.wcData.data.legacyProposal,
+            activeSessions
+          })
+        }
       }
     },
   },
@@ -136,7 +130,11 @@ export default {
       this.walletAddress = tmpSelectedAddress;
       this.isConnected = true;
       console.log(`@-> preparingSignClient...`);
-      await createSignClient();
+      if (this.wcVersion === 2) {
+        await createWeb3WalletV2();
+      } else {
+        await createSignClient();
+      }
       this.wcInitialized = true;
     }
 
@@ -150,25 +148,24 @@ export default {
   },
   methods: {
     signalListenerHandler(type, data) {
-      if (type === 'LegacySessionSignTypedDataModal') {
+      console.log(`onSignalListenerHandler`, { data, type })
+      if (type === 'SessionProposalModal') {
         this.wcData.modalType = type;
-        this.wcData.data = {
-          ...this.wcData.data,
-          legacyCallRequestEvent: data.legacyCallRequestEvent,
-        };
+        this.wcData.data.legacyProposal = data.proposal;
         this.wcData.openModal = true;
       } else {
         this.wcData.modalType = type;
         this.wcData.data = {
           ...this.wcData.data,
-          legacyProposal: data.legacyProposal,
-          legacyCallRequestEvent: data.legacyCallRequestEvent,
+          legacyCallRequestEvent: data.requestEvent,
         };
         this.wcData.openModal = true;
       }
     },
     getLegacySessionPersonalSignRequestId() {
-      console.log('this.wcData', this.wcData);
+      console.log('this.wcData', {
+        ...this.wcData.data
+      });
       if (!this.wcData) {
         return 'Unknown';
       }
@@ -191,17 +188,14 @@ export default {
       if (!this.wcData) {
         return 'Unknown';
       }
-      if (this.wcData?.data?.legacyProposal?.params[0]?.peerMeta?.name) {
-        return this.wcData?.data?.legacyProposal?.params[0]?.peerMeta?.name;
-      }
-      return 'Unknown Dapp';
+      return 'GuildXYZ';
     },
     getLegacyProposalUrl() {
       if (!this.wcData) {
         return 'Unknown';
       }
-      if (this.wcData?.data?.legacyProposal?.params[0]?.peerMeta?.url) {
-        return this.wcData?.data?.legacyProposal?.params[0]?.peerMeta?.url;
+      if (this.wcData?.data?.legacyProposal?.verifyContext?.verified?.origin) {
+        return this.wcData?.data?.legacyProposal?.verifyContext?.verified?.origin;
       }
       return 'Unknown';
     },
@@ -209,7 +203,11 @@ export default {
       this.walletAddress = address;
       this.isConnected = true;
       try {
-        await createSignClient();
+        if (this.wcVersion === 2) {
+          await createWeb3WalletV2();
+        } else {
+          await createSignClient();
+        }
         this.wcInitialized = true;
       } catch (error) {
         console.warn(error);
@@ -217,6 +215,7 @@ export default {
       }
     },
     async wssConnectionHandler(version = 1, uri) {
+      console.log(`onWssConnectionHandler`, { version, uri })
       if (!this.walletConnectController) {
         console.error(`WalletConnectController is not initialized`);
         return;
@@ -225,11 +224,11 @@ export default {
       if (version === 1) {
         this.walletConnectController.createSignLegacyClient({ uri });
       } else {
-        signClient.pair({ uri });
+        await pair({ uri })
       }
     },
-    onLegacySessionProposalRequest(type) {
-      if (type === constants.legacySessionProposalType.APPROVE) {
+    async onLegacySessionProposalRequest(type) {
+      if (type === constants.legacySessionProposalType.APPROVE && this.wcVersion === 1) {
         console.info(`@-> Connecting with address: ${this.walletAddress}`);
         this.walletConnectController.legacySignClient.approveSession({
           accounts: [this.walletAddress],
@@ -243,14 +242,51 @@ export default {
           title: 'Connected!',
           text: `You're just connected with dapp!`,
         });
+      } else if (type === constants.legacySessionProposalType.APPROVE && this.wcVersion === 2) {
+        const id = this.wcData.data.legacyProposal.id
+        const requiredNamespaces = this.wcData.data.legacyProposal?.params?.requiredNamespaces
+        let namespaces = {}
+        Object.keys(requiredNamespaces).forEach(key => {
+          const accounts = []
+          requiredNamespaces[key].chains?.map(chain => {
+            [this.walletAddress].map(acc => accounts.push(`${chain}:${acc}`))
+          })
+          namespaces[key] = {
+            accounts,
+            methods: requiredNamespaces[key].methods,
+            events: requiredNamespaces[key].events
+          }
+        })
+
+        await web3Wallet.approveSession({
+          id,
+          relayProtocol: this.wcData.data.legacyProposal.params.relays[0].protocol,
+          namespaces
+        })
+        this.walletConnectController.setupEventManagerHandler(true);
+        this.wcData.modalType = '';
+        this.wcData.openModal = false;
+        this.dappConnected = true;
+        this.openNotification('top-left', 'success', {
+          title: 'Connected!',
+          text: `You're just connected with dapp!`,
+        });
       } else {
         this.openNotification('top-left', 'danger', {
           title: 'Rejected',
           text: 'User Reject the request',
         });
-        this.walletConnectController.legacySignClient.rejectSession(
-          getSdkError('USER_REJECTED_METHODS')
-        );
+        if (this.wcVersion === 1) {
+          this.walletConnectController.legacySignClient.rejectSession(
+            getSdkError('USER_REJECTED_METHODS')
+          );
+        } else {
+          const id = this.wcData.data.legacyProposal.id
+          web3Wallet.rejectSession({
+            id,
+            reason: getSdkError('USER_REJECTED_EVENTS')
+          });
+        }
         this.wcData.modalType = '';
         this.wcData.openModal = false;
       }
@@ -260,7 +296,7 @@ export default {
       window.location.reload();
     },
     async disconnect() {
-      this.walletConnectController.deleteCachedLegacySession();
+      this.walletConnectController.deleteCachedLegacySession(this.wcVersion);
       this.dappConnected = false;
     },
     openNotification(
@@ -277,27 +313,11 @@ export default {
     },
     async onRequest(result) {
       if (result === constants.legacySessionProposalType.APPROVE) {
-        const reqId = this.wcData.data.legacyCallRequestEvent.id;
-
         let data = null;
         let getSignature = () => {};
-        if (this.wcData.modalType === 'LegacySessionSignTypedDataModal') {
-          data = this.wcData.data.legacyCallRequestEvent.params[1];
-          const jsonData = JSON.parse(data);
-          const { types, domain, message } = jsonData;
-          const email = localStorage.getItem('email');
-          delete types.EIP712Domain;
 
-          getSignature = async () => {
-            return signTypedData({
-              domain,
-              email,
-              message,
-              types,
-            });
-          };
-        } else if (this.wcData.modalType === 'LegacySessionSignModal') {
-          data = this.wcData.data.legacyCallRequestEvent.params[0];
+        if (this.wcData.modalType === 'SessionSignModal') {
+          data = this.wcData?.data?.legacyCallRequestEvent?.params?.request?.params?.[0];
           const hexMessage = data;
           const email = localStorage.getItem('email');
           getSignature = async () => {
@@ -309,10 +329,16 @@ export default {
         }
 
         if (!data) {
-          this.walletConnectController.legacySignClient.rejectRequest({
-            id: reqId,
-            error: 'Data is not valid',
-          });
+          if (this.wcVersion === 2) {
+            const id = this.wcData.data.legacyProposal.id
+            await web3Wallet.rejectSession({ id, reason: getSdkError('USER_REJECTED_EVENTS') })
+          } else {
+            const reqId = this.wcData.data.legacyCallRequestEvent.id;
+            this.walletConnectController.legacySignClient.rejectRequest({
+              id: reqId,
+              error: 'Data is not valid',
+            });
+          }
         }
 
         try {
@@ -320,17 +346,22 @@ export default {
           const signature = await getSignature();
           if (signature?.data?.res) {
             this.loading = false;
-            this.walletConnectController.legacySignClient.approveRequest({
-              id: reqId,
-              result: signature.data.res,
-            });
+            if (this.wcVersion === 1) {
+              const reqId = this.wcData.data.legacyCallRequestEvent.id;
+              this.walletConnectController.legacySignClient.approveRequest({
+                id: reqId,
+                result: signature.data.res,
+              });
+            } else {
+              const reqId = this.wcData.data.legacyCallRequestEvent.id;
+              const res = formatJsonRpcResult(reqId, signature?.data?.res)
+              await web3Wallet.respondSessionRequest({
+                topic: this.wcData.data.legacyCallRequestEvent.topic,
+                response: res
+              })
+            }
             this.wcData.modalType = '';
             this.wcData.openModal = false;
-            this.wcData.data.legacyCallRequestEvent = {
-              id: 0,
-              method: '',
-              params: [],
-            };
           }
         } catch (error) {
           this.openNotification('top-left', 'danger', {
@@ -341,10 +372,17 @@ export default {
           });
           this.loading = false;
           const reqId = this.wcData.data.legacyCallRequestEvent.id;
-          this.walletConnectController.legacySignClient.rejectRequest({
-            id: reqId,
-            error: 'User Rejected Request',
-          });
+          if (this.wcVersion === 1) {
+            this.walletConnectController.legacySignClient.rejectRequest({
+              id: reqId,
+              error: 'User Rejected Request',
+            });
+          } else {
+            await web3Wallet.respondSessionRequest({
+              topic: this.wcData.data.legacyCallRequestEvent.topic,
+              response: formatJsonRpcError(reqId, getSdkError('USER_REJECTED_EVENTS'))
+            })
+          }
           this.wcData.modalType = '';
           this.wcData.openModal = false;
           this.wcData.data.legacyCallRequestEvent = {
@@ -354,11 +392,16 @@ export default {
           };
         }
       } else {
-        const reqId = this.wcData.data.legacyCallRequestEvent.id;
-        this.walletConnectController.legacySignClient.rejectRequest({
-          id: reqId,
-          error: 'User Rejected Request',
-        });
+        if (this.wcVersion === 2) {
+          const id = this.wcData.data.legacyProposal.id
+          await web3Wallet.rejectSession({ id, reason: getSdkError('USER_REJECTED_EVENTS') })
+        } else {
+          const reqId = this.wcData.data.legacyCallRequestEvent.id;
+          this.walletConnectController.legacySignClient.rejectRequest({
+            id: reqId,
+            error: 'User Rejected Request',
+          });
+        }
         this.openNotification('top-left', 'danger', {
           title: 'Rejected',
           text: 'User Reject the request',

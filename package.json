@@ -23,6 +23,7 @@
     "@walletconnect/legacy-types": "^2.0.0",
     "@walletconnect/sign-client": "^2.8.1",
     "@walletconnect/utils": "^2.8.1",
+    "@walletconnect/web3wallet": "^1.8.2",
     "core-js": "^3.8.3",
     "ethers": "5.7",
     "graphql": "^16.7.0",

@@ -22,9 +22,9 @@
           </code>
         </div>
         <p class="ml-2 text-gray-200">Sign data</p>
-        <div class="p-2 mx-2 rounded-lg bg-gray-300 flex flex-col space-y-1 max-h-28 overflow-y-scroll max-w-md">
+        <div v-if="signData !== 'Unknown'" class="p-2 mx-2 rounded-lg bg-gray-300 flex flex-col space-y-1 max-h-28 overflow-y-scroll max-w-md">
           <code>
-            {{ JSON.parse(signData || {}).message }}
+            {{ JSON.parse(signData || "{}")?.message }}
           </code>
         </div>
         <div class="footer-dialog flex flex-row items-center">
@@ -52,6 +52,9 @@ export default {
     signData: String,
     buttonLoading: Boolean,
     onRequest: {}
+  },
+  mounted() {
+    
   },
   data: () => ({
     isLoading: false
